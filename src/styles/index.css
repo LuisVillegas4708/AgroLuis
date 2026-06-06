@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background-color: #F8F9FA;
+    color: #212529;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+  #root { min-height: 100%; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-agro-accent text-white font-semibold px-5 py-3 rounded-xl min-h-touch
+           hover:bg-green-600 active:scale-95 transition-all duration-200
+           flex items-center justify-center gap-2 cursor-pointer
+           disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100;
+  }
+  .btn-secondary {
+    @apply bg-white text-agro-primary font-semibold px-5 py-3 rounded-xl min-h-touch
+           border border-agro-accent hover:bg-green-50 active:scale-95 transition-all duration-200
+           flex items-center justify-center gap-2 cursor-pointer
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .card {
+    @apply bg-white rounded-2xl shadow-sm border border-gray-100 p-5;
+  }
+  .input {
+    @apply w-full border border-gray-200 rounded-xl px-4 py-3 text-sm
+           focus:outline-none focus:ring-2 focus:ring-agro-accent min-h-touch bg-white;
+  }
+  .triage-verde { @apply bg-green-100 text-green-800 border-green-200; }
+  .triage-amarillo { @apply bg-yellow-100 text-yellow-800 border-yellow-200; }
+  .triage-rojo { @apply bg-red-100 text-red-800 border-red-200; }
+}
+
+.page-enter { animation: fadeSlideIn 0.2s ease-out; }
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
