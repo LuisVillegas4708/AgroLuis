@@ -20,3 +20,6 @@ pnpm-debug.log*
 
 # Config local de Claude Code (puede contener secretos en el log de comandos)
 .claude/
+
+# Conexión directa a la base (privado)
+supabase/.db-local.json
