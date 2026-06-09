@@ -204,14 +204,21 @@ alter table public.bitacora               enable row level security;
 alter table public.mediciones_ambientales enable row level security;
 alter table public.chat_mensajes          enable row level security;
 
--- helpers
-create or replace function public.current_profile() returns public.profiles
-language sql stable as $$
-  select * from public.profiles where id = auth.uid();
-$$;
+-- =====================================================================
+-- FUNCIONES DE AYUDA (helpers)
+--
+-- IMPORTANTE — todas son SECURITY DEFINER con search_path fijo.
+-- Razón: una política de seguridad (RLS) no puede consultar una tabla
+-- que TAMBIÉN tiene RLS sin entrar en un círculo infinito
+-- ("la regla A pregunta a la tabla B, cuya regla B pregunta a la tabla A...").
+-- SECURITY DEFINER hace que la función consulte la tabla SALTÁNDOSE las
+-- reglas (corre con permisos del dueño), rompiendo el círculo de raíz.
+-- Por eso TODAS las comprobaciones de las políticas pasan por estas
+-- funciones, y NINGUNA política consulta otra tabla directamente.
+-- =====================================================================
 
 create or replace function public.current_rol() returns text
-language sql stable as $$
+language sql stable security definer set search_path = public as $$
   select rol from public.profiles where id = auth.uid();
 $$;
 
@@ -219,12 +226,30 @@ $$;
 --   * si rol = productor → su propio id
 --   * si rol = tecnico/asociado → el productor al que pertenece (productor_id)
 create or replace function public.current_productor_id() returns uuid
-language sql stable as $$
+language sql stable security definer set search_path = public as $$
   select case
     when p.rol = 'productor' then p.id
     else p.productor_id
   end
   from public.profiles p where p.id = auth.uid();
+$$;
+
+-- ¿el usuario actual es el productor DUEÑO de la parcela p_id?
+create or replace function public.is_owner_of_parcela(p_id uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.parcelas p
+    where p.id = p_id and p.productor_id = auth.uid()
+  );
+$$;
+
+-- ¿el usuario actual tiene una asignación (técnico/asociado) a la parcela p_id?
+create or replace function public.has_asignacion(p_id uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.parcela_asignaciones a
+    where a.parcela_id = p_id and a.user_id = auth.uid()
+  );
 $$;
 
 -- -------------------- profiles --------------------
@@ -248,20 +273,22 @@ create policy profiles_insert on public.profiles for insert
   );
 
 -- -------------------- parcelas --------------------
+-- Lectura: el equipo del productor, el staff, o quien tenga asignación.
+-- Nota: usamos has_asignacion() (función segura) en vez de consultar
+-- parcela_asignaciones directamente, para no crear un círculo de reglas.
 drop policy if exists parcelas_read on public.parcelas;
 create policy parcelas_read on public.parcelas for select
   using (
     productor_id = public.current_productor_id()
     or public.current_rol() = 'staff'
-    or exists (
-      select 1 from public.parcela_asignaciones a
-      where a.parcela_id = parcelas.id and a.user_id = auth.uid()
-    )
+    or public.has_asignacion(id)
   );
+-- Escritura: solo el productor dueño (o staff). productor_id = auth.uid()
+-- compara una columna de la propia fila, no consulta otra tabla → sin círculo.
 drop policy if exists parcelas_write on public.parcelas;
 create policy parcelas_write on public.parcelas for all
   using (
-    productor_id = auth.uid()           -- solo el productor dueño escribe
+    productor_id = auth.uid()
     or public.current_rol() = 'staff'
   )
   with check (
@@ -270,46 +297,39 @@ create policy parcelas_write on public.parcelas for all
   );
 
 -- -------------------- parcela_asignaciones --------------------
+-- Usamos is_owner_of_parcela() (función segura) en vez de consultar
+-- la tabla parcelas directamente → sin círculo de reglas.
 drop policy if exists asign_read on public.parcela_asignaciones;
 create policy asign_read on public.parcela_asignaciones for select
   using (
     user_id = auth.uid()
-    or exists (select 1 from public.parcelas p
-               where p.id = parcela_asignaciones.parcela_id
-                 and p.productor_id = auth.uid())
+    or public.is_owner_of_parcela(parcela_id)
     or public.current_rol() = 'staff'
   );
 drop policy if exists asign_write on public.parcela_asignaciones;
 create policy asign_write on public.parcela_asignaciones for all
   using (
-    exists (select 1 from public.parcelas p
-            where p.id = parcela_asignaciones.parcela_id
-              and p.productor_id = auth.uid())
+    public.is_owner_of_parcela(parcela_id)
     or public.current_rol() = 'staff'
   )
   with check (
-    exists (select 1 from public.parcelas p
-            where p.id = parcela_asignaciones.parcela_id
-              and p.productor_id = auth.uid())
+    public.is_owner_of_parcela(parcela_id)
     or public.current_rol() = 'staff'
   );
 
--- -------------------- helpers reutilizables para tablas hijas de parcelas --------------------
+-- -------------------- acceso a tablas hijas de parcelas --------------------
 -- Patrón: si tienes acceso a la parcela, tienes acceso a sus filas hijas.
+-- Combina las funciones seguras anteriores (todo sin consultar tablas con RLS).
 create or replace function public.can_access_parcela(p_id uuid) returns boolean
-language sql stable as $$
-  select exists (
-    select 1 from public.parcelas p
-    where p.id = p_id
-      and (
-        p.productor_id = public.current_productor_id()
-        or public.current_rol() = 'staff'
-        or exists (
-          select 1 from public.parcela_asignaciones a
-          where a.parcela_id = p.id and a.user_id = auth.uid()
-        )
-      )
-  );
+language sql stable security definer set search_path = public as $$
+  select
+    public.is_owner_of_parcela(p_id)
+    or public.has_asignacion(p_id)
+    or public.current_rol() = 'staff'
+    or exists (
+      select 1 from public.parcelas p
+      where p.id = p_id and p.productor_id = public.current_productor_id()
+    );
 $$;
 
 -- -------------------- croquis_secciones --------------------
