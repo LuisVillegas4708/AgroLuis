@@ -5,12 +5,32 @@
  */
 import React from 'react'
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, ChevronLeft, ChevronRight, Leaf } from 'lucide-react'
+import { LayoutDashboard, MapPin, ChevronLeft, ChevronRight, Leaf } from 'lucide-react'
 import useStore from '../../store/useStore'
 
+// Navegación por rol. Crece con cada módulo entregado.
+const NAV_POR_ROL = {
+  productor: [
+    { to: '/app', icon: LayoutDashboard, label: 'Dashboard', end: true },
+    { to: '/app/parcelas', icon: MapPin, label: 'Mis Parcelas' }
+  ],
+  tecnico: [
+    { to: '/app', icon: LayoutDashboard, label: 'Dashboard', end: true },
+    { to: '/app/parcelas', icon: MapPin, label: 'Parcelas' }
+  ],
+  asociado: [
+    { to: '/app', icon: LayoutDashboard, label: 'Dashboard', end: true },
+    { to: '/app/parcelas', icon: MapPin, label: 'Parcelas' }
+  ],
+  staff: [
+    { to: '/app', icon: LayoutDashboard, label: 'Dashboard', end: true },
+    { to: '/app/parcelas', icon: MapPin, label: 'Todas las parcelas' }
+  ]
+}
+
 export default function Sidebar() {
-  const { sidebarCollapsed, toggleSidebar } = useStore()
-  const items = [{ to: '/app', icon: LayoutDashboard, label: 'Dashboard', end: true }]
+  const { sidebarCollapsed, toggleSidebar, profile } = useStore()
+  const items = NAV_POR_ROL[profile?.rol] || NAV_POR_ROL.productor
 
   return (
     <aside

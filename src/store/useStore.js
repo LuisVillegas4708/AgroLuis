@@ -9,8 +9,10 @@ const useStore = create((set) => ({
   // Sesión (sincronizada por modules/auth con supabase.auth)
   session: null,
   profile: null, // { id, nombre, rol, productor_id, subrol }
+  authReady: false, // false hasta que se hidrata la sesión al cargar la página
   setSession: (session) => set({ session }),
   setProfile: (profile) => set({ profile }),
+  setAuthReady: (v) => set({ authReady: v }),
   logout: () => set({ session: null, profile: null, parcelaActiva: null }),
 
   // Parcela activa para el contexto de toda la app
